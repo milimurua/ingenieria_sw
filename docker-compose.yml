@@ -1,0 +1,15 @@
+services:
+  samur-telegram-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: samur-telegram-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - samur_bot_data:/app/data
+    command: python run.py
+
+volumes:
+  samur_bot_data:
