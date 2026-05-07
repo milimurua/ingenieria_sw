@@ -36,27 +36,42 @@ VEHICLES = [
 
 
 def seed_data() -> None:
+
     with get_connection() as conn:
-        count = conn.execute('SELECT COUNT(*) AS total FROM bases').fetchone()['total']
+
+        conn.execute('SELECT COUNT(*) AS total FROM bases')
+
+        count = conn.fetchone()['total']
+
         if count:
             return
 
         conn.executemany(
-            'INSERT INTO bases(name, priority, min_staff, required_vehicle) VALUES (?, ?, ?, ?)',
+            'INSERT INTO bases(name, priority, min_staff, required_vehicle) VALUES (%s, %s, %s, %s)',
             BASES,
         )
 
+        conn.execute('SELECT id, name FROM bases')
+
+        base_rows = conn.fetchall()
+
         base_map = {
             row['name']: row['id']
-            for row in conn.execute('SELECT id, name FROM bases').fetchall()
+            for row in base_rows
         }
 
         conn.executemany(
-            'INSERT INTO personnel(full_name, role, home_base_id, is_driver) VALUES (?, ?, ?, ?)',
-            [(name, role, base_map[base_name], is_driver) for name, role, base_name, is_driver in PERSONNEL],
+            'INSERT INTO personnel(full_name, role, home_base_id, is_driver) VALUES (%s, %s, %s, %s)',
+            [
+                (name, role, base_map[base_name], is_driver)
+                for name, role, base_name, is_driver in PERSONNEL
+            ],
         )
 
         conn.executemany(
-            'INSERT INTO vehicles(code, vehicle_type, current_base_id) VALUES (?, ?, ?)',
-            [(code, vtype, base_map[base_name]) for code, vtype, base_name in VEHICLES],
+            'INSERT INTO vehicles(code, vehicle_type, current_base_id) VALUES (%s, %s, %s)',
+            [
+                (code, vtype, base_map[base_name])
+                for code, vtype, base_name in VEHICLES
+            ],
         )

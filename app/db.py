@@ -1,92 +1,142 @@
 from __future__ import annotations
 
-import sqlite3
+import mysql.connector
 from contextlib import contextmanager
-from pathlib import Path
 
 from app.config import settings
 
 
 SCHEMA_SQL = """
-PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS bases (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    priority INTEGER NOT NULL,
-    min_staff INTEGER NOT NULL,
-    required_vehicle TEXT NOT NULL
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    priority INT NOT NULL,
+    min_staff INT NOT NULL,
+    required_vehicle VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS personnel (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    full_name TEXT NOT NULL UNIQUE,
-    role TEXT NOT NULL,
-    home_base_id INTEGER NOT NULL,
-    status TEXT NOT NULL DEFAULT 'available',
-    is_driver INTEGER NOT NULL DEFAULT 0,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(255) NOT NULL UNIQUE,
+    role VARCHAR(100) NOT NULL,
+    home_base_id INT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'available',
+    is_driver BOOLEAN NOT NULL DEFAULT FALSE,
     FOREIGN KEY(home_base_id) REFERENCES bases(id)
 );
 
 CREATE TABLE IF NOT EXISTS vehicles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT NOT NULL UNIQUE,
-    vehicle_type TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'available',
-    current_base_id INTEGER,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(100) NOT NULL UNIQUE,
+    vehicle_type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'available',
+    current_base_id INT,
     FOREIGN KEY(current_base_id) REFERENCES bases(id)
 );
 
 CREATE TABLE IF NOT EXISTS assignments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    base_id INTEGER NOT NULL,
-    person_id INTEGER NOT NULL,
-    vehicle_id INTEGER,
-    assigned_at TEXT NOT NULL,
-    active INTEGER NOT NULL DEFAULT 1,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    base_id INT NOT NULL,
+    person_id INT NOT NULL,
+    vehicle_id INT,
+    assigned_at DATETIME NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
     FOREIGN KEY(base_id) REFERENCES bases(id),
     FOREIGN KEY(person_id) REFERENCES personnel(id),
     FOREIGN KEY(vehicle_id) REFERENCES vehicles(id)
 );
 
 CREATE TABLE IF NOT EXISTS absences (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    person_id INTEGER NOT NULL,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    person_id INT NOT NULL,
     reason TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    reported_by TEXT,
-    status TEXT NOT NULL DEFAULT 'open',
-    replacement_person_id INTEGER,
+    created_at DATETIME NOT NULL,
+    reported_by VARCHAR(255),
+    status VARCHAR(50) NOT NULL DEFAULT 'open',
+    replacement_person_id INT,
     FOREIGN KEY(person_id) REFERENCES personnel(id),
     FOREIGN KEY(replacement_person_id) REFERENCES personnel(id)
 );
 
 CREATE TABLE IF NOT EXISTS alerts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source TEXT NOT NULL,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    source VARCHAR(255) NOT NULL,
     description TEXT NOT NULL,
-    location TEXT,
-    created_at TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'open'
+    location VARCHAR(255),
+    created_at DATETIME NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'open'
 );
 """
 
 
+def create_database_if_not_exists():
+
+    conn = mysql.connector.connect(
+        host=settings.mysql_host,
+        port=settings.mysql_port,
+        user=settings.mysql_user,
+        password=settings.mysql_password
+    )
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"CREATE DATABASE IF NOT EXISTS {settings.mysql_database}"
+    )
+
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+
 def ensure_database() -> None:
-    db_path = Path(settings.db_path)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db_path) as conn:
-        conn.executescript(SCHEMA_SQL)
-        conn.commit()
+
+    create_database_if_not_exists()
+
+    conn = mysql.connector.connect(
+        host=settings.mysql_host,
+        port=settings.mysql_port,
+        user=settings.mysql_user,
+        password=settings.mysql_password,
+        database=settings.mysql_database
+    )
+
+    cursor = conn.cursor()
+
+    for statement in SCHEMA_SQL.split(";"):
+
+        stmt = statement.strip()
+
+        if stmt:
+            cursor.execute(stmt)
+
+    conn.commit()
+
+    cursor.close()
+    conn.close()
 
 
 @contextmanager
 def get_connection():
+
     ensure_database()
-    conn = sqlite3.connect(settings.db_path)
-    conn.row_factory = sqlite3.Row
+
+    conn = mysql.connector.connect(
+        host=settings.mysql_host,
+        port=settings.mysql_port,
+        user=settings.mysql_user,
+        password=settings.mysql_password,
+        database=settings.mysql_database
+    )
+
+    cursor = conn.cursor(dictionary=True)
+
     try:
-        yield conn
+        yield cursor
         conn.commit()
+
     finally:
+        cursor.close()
         conn.close()
