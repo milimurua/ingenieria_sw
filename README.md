@@ -1,4 +1,4 @@
-# SEC Telegram Bot
+# SAMUR Telegram Bot
 
 Bot de prueba en Python para gestionar ausencias, alertas operativas y reorganización de equipos SAMUR desde Telegram.
 
